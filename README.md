@@ -1,13 +1,13 @@
-<<Project Name>>
+**Project Name**
 
-<<Short project description>>
-<<Example: This is the formalization of normed real Vector spaces and the theorem of Dunnodoncare, based on Lecture notes by XYZ >>
+--Short project description--
+--Example: This is the formalization of normed real Vector spaces and the theorem of Dunnodoncare, based on Lecture notes by XYZ >>
 
 File Structure: 
 
-<<For each Lean file in your project, give a quick line on what it contains>>
+--For each Lean file in your project, give a quick line on what it contains
 
-<<Example:
+--Example:
 Main/
   Vectors/
     Defs.lean   : Basic definitions of vector spaces and vectors
@@ -26,4 +26,5 @@ At the top of each code file there needs to be a comment on who the author of th
 The documentation consists of two files, PDF-format, per person(!):
 
 theory_MaxMustermann.pdf : Describe the theoretical background of your project, give basic definitions and theorems
+
 formal_MaxMustermann.pdf : Describe your formalization approach. What is your model, what were difficulties? Document your implementation.
