@@ -253,11 +253,32 @@ theorem PerfectMatching.partner_block (M : PerfectMatching α) (i : α) :
     unfold first_or_second_if_not; aesop;
     exact Finset.pair_comm _ _;
   aesop
--- From here on out my own work.
+-- From here on out solely my own work.
+lemma partner_not_eq
+  {n : ℕ} (M : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
+  PerfectMatching.partner M x ≠ x :=
+by
+intro h
+have help := M.block_spec x
+obtain⟨help1,help2⟩:=help
+rw[PerfectMatching.partner] at h
+rw[first_or_second_if_not] at h
+by_cases h2: (M.block x).1 =x
+· simp only [h2, ↓reduceIte] at h
+  nth_rewrite 2 [← h2] at h
+  have h3:=M.ordered (M.block x) help1
+  symm at h
+  rw[h] at h3
+  exact (lt_self_iff_false (M.block x).2).mp h3
+· simp only [h2, ↓reduceIte] at h
+
+-- We define a list which are all the edges of a PerfectMatching on Fin(2*n)in order.
+-- This will be useful in defining a permutation
 def sortedEdges
   (M : PerfectMatching (Fin (2 * n))) :
   List (Fin (2*n)×ₗFin (2*n)) :=
   M.edges.sort
+--We establish that the length is the expected value
 theorem sortedEdges_length (n : ℕ) (M : PerfectMatching (Fin (2 * n))) :
 ((M.edges).sort).length= n:=
 by
@@ -270,7 +291,7 @@ apply Nat.mul_left_cancel at h
 · exact h.symm
 exact Nat.zero_lt_two
 
-
+--We establish that the list contains no duplicates
 theorem sortedEdges_nodup (n : ℕ) (M : PerfectMatching (Fin (2 * n))) : List.Nodup (M.edges.sort) :=
 by exact sort_nodup M.edges fun a b ↦ a ≤ b
 
@@ -280,18 +301,16 @@ theorem sortedEdges_injone (l m n : ℕ) (M : PerfectMatching (Fin (2 * n)))
 have h4 := sortedEdges_nodup n M
 exact (List.Nodup.getElem_inj_iff h4).mp h
 
- --theorem etwaso (u:ℕ) (h:u=1): if u=1 then 1
-  --else 0 = 0 := by
 variable {R : Type v} [CommRing R]
---def Pf (M : Matrix (Fin (2*n)) (Fin (2*n)) R):R :=
--- ∑ σ : Perm (Fin (2*n)), Equiv.Perm.sign σ • ∏ i ∈ Fin (2*n) with i∈Fin n, M (σ (i)) (σ i)
 end Matrix
-#check Fin.ofNat 2 3
-def mod_two {n : ℕ} (u : Fin (2 * n)) : Fin 2 := Fin.ofNat 2 ((Fin.val u) %2)
+--We define a number of helper functions to define the associated permutation to the matching
+--These first two define an equivalence between the finset containing 2n elements
+--and the product of finsets containing 2 and n elements. This eases defining a permuation on 2n
 def evenfiniso (n : ℕ) [NeZero n] (u : Fin (2 * n)) :
 (Fin 2 × Fin n):= (Fin.ofNat 2 ((Fin.val u) %2) ,(Fin.ofNat n ((Fin.val u)/2) : Fin n))
 def fineveniso {n : ℕ} [NeZero n] (u : (Fin 2 × Fin n)) : Fin (2*n)
 := Fin.ofNat (2*n) (2* (Fin.val (u.2)) + Fin.val (u.1))
+-- The following is the heart of our permutation but defined on a product.
 def crossedges (n : ℕ) (M : PerfectMatching (Fin (2 * n)))
 (u : Fin 2 × Fin n) : Fin (2 * n) :=
 by
@@ -300,10 +319,10 @@ have h: ((M.edges).sort).length= n:=
 by_cases h2: u.1=0
 · exact ((M.edges.sort)[u.2]).1
 exact ((M.edges.sort)[u.2]).2
+--Here we define the actual permutation
 def perm_of_matching (n : ℕ) [NeZero n] (M : PerfectMatching (Fin (2 * n)))
 (u : Fin (2 * n)) : Fin (2 * n) :=crossedges  n M (evenfiniso n u)
-theorem modhelp (a b : ℕ) (h : a < b) : a % b = a :=by exact Nat.mod_eq_of_lt h
-theorem prodhelp {n : ℕ} (u : (Fin 2 × Fin n)) : u =(u.1,u.2) := by exact Prod.snd_eq_iff.mp rfl
+--We show that our two helper functions indeed are an equivalence by showing they are inverses
 theorem fineveniso_inverse {n : ℕ} [NeZero n] (u : Fin (2 * n)) :
 fineveniso (evenfiniso n u) = u:= by
 rw[fineveniso, evenfiniso]
@@ -356,26 +375,8 @@ rw[ite_cond_eq_false]
 · rw[Nat.add_zero]
   simp
 exact eq_false h13
-
-
-
---have h2 : ↑(↑u.1 % 2) = u.1 := by
- -- by_cases h3: u.1 =0
- -- rw[h3]
- -- simp
---  have h4: u.1 = 1:=
- --   by exact Fin.eq_one_of_ne_zero u.1 h3
- -- rw[h4]
- -- simp
---rw[h2]
---by_cases hsomethingmore: u.1 =0
---rw[hsomethingmore]
---simp
-
-
-
-
-
+--With this in hand it is enough to show that crossedges is injective to show that
+--we indeed have a permutation
 theorem crossedges_injective {n : ℕ} [NeZero n]
 (M : PerfectMatching (Fin (2 * n))) : Function.Injective (crossedges n M) := by
 intro a b h
@@ -481,7 +482,7 @@ theorem perm_of_matching_surjective {n : ℕ} [NeZero n] (M : PerfectMatching (F
 Function.Surjective (perm_of_matching n M) := by
 exact Bijective.surjective (perm_of_matching_bijective M)
 
-
+--We can now finally construct our permutation
 noncomputable def toPerm {n : ℕ} [NeZero n]
   (M : PerfectMatching (Fin (2 * n))) :
   Equiv.Perm (Fin (2*n)) :=
@@ -503,23 +504,15 @@ by
 
   · exact leftInverse_invFun (perm_of_matching_injective n M)
   · exact rightInverse_invFun (Bijective.surjective (perm_of_matching_bijective M))
+--we define the sign of our matching to be the sign of the associated permutation
 noncomputable def signMatching {n : ℕ} [NeZero n]
   (M : PerfectMatching (Fin (2 * n))) : ℤˣ := Equiv.Perm.sign (toPerm M)
 
-theorem matching_injective {n : ℕ} [NeZero n]
-: Function.Injective (crossedges n ):=by
-intro M N h
-have h2 :∀a : Fin 2 × Fin n, crossedges n M a = crossedges n N a :=by
-  exact fun a ↦Fin.eq_of_val_eq (congrArg Fin.val (congrFun h a))
-by_contra!
-by_cases
-sorry
-sorry
-sorry
+--We can now almost define the Pfaffian, but we need to convince ourselves our sums are finite
 def toedges (n : ℕ) [NeZero n] (M : PerfectMatching (Fin (2 * n))) :
   Finset (Lex (Fin (2 * n) × Fin (2 * n))) := M.edges
 
-theorem toedges_injective (n : ℕ) [NeZero n] : Injective (toedges n) := by
+lemma toedges_injective (n : ℕ) [NeZero n] : Injective (toedges n) := by
 intro M N h
 rw[toedges] at h
 rw[toedges] at h
@@ -533,7 +526,14 @@ noncomputable def fintypematching
 have h := toedges_injective n
 exact Fintype.ofInjective (toedges n) h
 
-theorem matching_card (n : ℕ) [NeZero n] (M : PerfectMatching (Fin (2 * n))) :
+--Here finally is our definition of the pfaffian.
+noncomputable def Pf
+{R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R):R := by
+have h := fintypematching n
+exact ∑ M: (PerfectMatching (Fin (2 * n))), signMatching M * ∏ i ∈ M.edges, A (i.1) (i.2)
+
+--We show a couple of simple properties.
+lemma matching_card (n : ℕ) [NeZero n] (M : PerfectMatching (Fin (2 * n))) :
    M.edges.card = n := by
 have h1 : 2*M.edges.card =2*n := by
   have h2 : 2*M.edges.card = Fintype.card (Fin (2*n)) := by
@@ -543,13 +543,6 @@ have h1 : 2*M.edges.card =2*n := by
 apply Nat.mul_left_cancel at h1
 · exact h1
 exact Nat.zero_lt_two
-
-noncomputable def Pf
-{R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R):R := by
-have h := fintypematching n
-exact ∑ M: (PerfectMatching (Fin (2 * n))), signMatching M * ∏ i ∈ M.edges, A (i.1) (i.2)
-
-
 
 theorem Pf_mul {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (a : R)
 (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) : Pf (a • A) = a^n * Pf A := by
@@ -568,7 +561,8 @@ rw[h]
 have h2:= Pf_mul (-1) A
 rw[neg_one_smul] at h2
 exact h2
-
+--We now begin our long journey to proving (Pf A)^2 =det A.
+--We begin by partitioning permutations into two kinds.
 theorem sign_two_values {α : Type u_2} [Fintype α] [LinearOrder α]
 (f : Perm α) (h : sign f ≠ -1) : sign f =1 := by
 have h2 : sign f = 1 ∨ sign f= -1 := by exact Int.units_eq_one_or (sign f)
@@ -609,6 +603,7 @@ push_neg
 by_cases h : ¬even_perm f
 sorry
 sorry
+--The determinant maybe split into two sums over the odds and the evens
 theorem det_eq_sum_odd_even
 {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :
 det A = ∑ σ : Perm (Fin (2 * n)) with even_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i +
@@ -621,6 +616,8 @@ have h :det A = ∑ σ : Perm (Fin (2 * n)) with even_perm σ, Equiv.Perm.sign �
 rw[h]
 rw [add_right_inj]
 sorry
+--We now aim to show that the odd permutations sum to zero by explicitly showing which terms cancel
+--To any odd permuation we associate another with which it will cancel.
 theorem nat_of_odd_perm {n : ℕ} [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f) :
 ∃m : ℕ,  sign (f.cycleOf (Fin.ofNat (2*n) m)) =1 := by
 rw[odd_perm] at h
@@ -667,35 +664,16 @@ sorry
 theorem inv_perm_of_odd_perm {n : ℕ}  [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f)  : perm_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h) = f := by
 rw[perm_of_odd_perm]
 sorry
+--The preceeding work culminates here in showing that the odd permutations
+--do not contribute to the determinant
 theorem odd_sum_eq_zero {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h:A.IsSkewSymm) :
 ∑ σ : Perm (Fin (2 * n)) with odd_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i = 0 :=by sorry
-theorem det_eq_Pf_square {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
-(A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h : IsSkewSymm A) : (Pf A)*(Pf A) = det A := by
-rw[Pf]
-rw[det_eq_sum_odd_even]
-rw[odd_sum_eq_zero,add_zero]
-sorry
-sorry
 
 
-theorem partner_not_eq
-  {n : ℕ} (M : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
-  PerfectMatching.partner M x ≠ x :=
-by
-intro h
-have help := M.block_spec x
-obtain⟨help1,help2⟩:=help
-rw[PerfectMatching.partner] at h
-rw[first_or_second_if_not] at h
-by_cases h2: (M.block x).1 =x
-· simp only [h2, ↓reduceIte] at h
-  nth_rewrite 2 [← h2] at h
-  have h3:=M.ordered (M.block x) help1
-  symm at h
-  rw[h] at h3
-  exact (lt_self_iff_false (M.block x).2).mp h3
-· simp only [h2, ↓reduceIte] at h
 
+--We now aim to associate an even permutation to every pair of matchings
+--We construct this permutation by constructing disjoint cycles that multiply to it.
+--We construct these cycles from a list which we construct iteratively.
 def list_of_pair_matching_it
 {n : ℕ} (M N : (PerfectMatching (Fin (2 * n)))) (Lx : List (Fin (2 * n)) × Fin (2 * n))
 : List (Fin (2 * n))×Fin (2*n):=
@@ -715,7 +693,7 @@ def list_of_pair_matching
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
   List (Fin (2 * n)) :=
 list_of_pair_matching_it_many n M N x
-
+--We show this list has no duplicates iteratively
 lemma list_of_pair_matching_it_nodup_of_nodup
   {n : ℕ} (M N : (PerfectMatching (Fin (2 * n))))
   (Lx : List (Fin (2 * n)) × Fin (2 * n)) (hl : List.Nodup Lx.1) :
@@ -766,7 +744,7 @@ theorem list_of_pair_matching_nodup
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
   List.Nodup (list_of_pair_matching M N x) :=by
 exact list_of_pair_matching_it_many_nodup n M N x
-
+--We show that the list is not trivial iteratively
 lemma length_le_list_of_pair_matching_it
 {n : ℕ} (M N : (PerfectMatching (Fin (2 * n)))) (Lx : List (Fin (2 * n)) × Fin (2 * n)) :
 (Lx.1).length≤ ((list_of_pair_matching_it M N Lx).1).length := by
@@ -797,7 +775,7 @@ theorem two_le_list_of_pair_matching
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
   2≤ (list_of_pair_matching M N x).length :=by
 exact two_le_list_of_pair_matching_it_many_length n M N x
-
+--We also show it has an even number of elements iteratively
 lemma even_list_of_pair_matching_it_of_even
   {n : ℕ} (M N : (PerfectMatching (Fin (2 * n)))) (Lx : List (Fin (2 * n)) × Fin (2 * n))
   (hl : 2 ∣ ((Lx.1).length)) :
@@ -834,12 +812,12 @@ theorem even_list_of_pair_matching {n : ℕ} [NeZero n] (M N : PerfectMatching (
  (x : Fin (2 * n)) : 2∣  (list_of_pair_matching M N x ).length :=
 by exact even_list_of_pair_matching_it_many n M N x
 
-
+--We define the cycle from our list
 def cycle_of_pair_matching {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
  (x : Fin (2 * n)):Perm (Fin (2 * n)):=by
 have l := list_of_pair_matching M N x
 exact List.formPerm l
-
+--We show it is indeed a cycle from the preceeding work
 theorem cycle_of_pair_matching_cycle {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n))))
   (x : Fin (2 * n)) : IsCycle (cycle_of_pair_matching M N x) :=
 by
@@ -850,13 +828,13 @@ rw[cycle_of_pair_matching]
 exact List.isCycle_formPerm h h2
 
 
-
+--We show that it has negative sign from our evenness theorems
 theorem cycle_of_pair_matching_even {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
   (x : Fin (2 * n)) : sign (cycle_of_pair_matching M N x) = -1 := by
 have h := cycle_of_pair_matching_cycle M N x
 have h2 :=even_list_of_pair_matching M N x
 sorry
-
+--We now build the full permutation iteratively
 def perm_of_pair_matching_it {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
  (fm : Perm (Fin (2 * n)) × ℕ) : Perm (Fin (2 * n)) × ℕ :=
 by exact (if Fin.ofNat (2*n) (fm.2)∉fm.1.support
@@ -869,7 +847,7 @@ exact ((perm_of_pair_matching_it M N) ^[m] (1,1)).1
 def perm_of_pair_matching
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) : Perm (Fin (2*n)) := by
 exact perm_of_pair_matching_it_many n M N
-
+--We show that this permutation is even iteratively.
 theorem even_perm_perm_of_pair_matching_it_of_even {n : ℕ} [NeZero n]
  (M N : (PerfectMatching (Fin (2 * n)))) (fm : Perm (Fin (2 * n)) × ℕ) (hfm : even_perm fm.1) :
   even_perm ((perm_of_pair_matching_it M N fm).1) :=
@@ -905,11 +883,17 @@ by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
   exact hfm
 theorem even_perm_of_pair_matching  {n : ℕ} [NeZero n](M N: (PerfectMatching (Fin (2 * n)))) : even_perm (perm_of_pair_matching M N) :=
 by sorry
-
+--We now start build a pair of matchings from a given even permutation.
 theorem pair_matching_of_even_perm {n : ℕ} [NeZero n] (σ : Perm (Fin (2 * n))) (hσ : even_perm σ) :
 ∃M :PerfectMatching (Fin (2 * n)),∃N :PerfectMatching (Fin (2 * n)), σ = perm_of_pair_matching M N := by sorry
-
-
+--After this we show that signs and products are preserved under our bijection.
+theorem det_eq_Pf_square {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
+(A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h : IsSkewSymm A) : (Pf A)*(Pf A) = det A := by
+rw[Pf]
+rw[det_eq_sum_odd_even]
+rw[odd_sum_eq_zero,add_zero]
+sorry
+sorry
 def equivtest {n : ℕ} [NeZero n] :Equiv (Fin (2*n)) (Fin 2 × Fin n) :=
 by
   classical
