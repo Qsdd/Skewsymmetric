@@ -1,6 +1,4 @@
 import Mathlib
-
-
 open Matrix
 open BigOperators
 open Equiv Equiv.Perm Finset Function
@@ -71,6 +69,8 @@ theorem det_eq_zero_of_IsSkewSymm_odd_dim [CommRing α] [NoZeroDivisors α]
   apply Or.resolve_left at h4
   exact h4 h0
 
+---The following are due to LEAN club, modified to my purposes
+
 structure PerfectMatching (α : Type u) [Fintype α] [DecidableEq α] [LinearOrder α] where
   edges : Finset (α ×ₗ α)
   ordered : ∀ b ∈ edges, b.1 < b.2
@@ -78,19 +78,69 @@ structure PerfectMatching (α : Type u) [Fintype α] [DecidableEq α] [LinearOrd
   (a ≠ b)→ (a.1 ≠ b.1  ∧ a.2 ≠ b.2 ∧ a.1 ≠ b.2 ∧ a.2 ≠ b.1)
   union : ∀ (i : α), ∃ b ∈ edges, (i = b.1 ∨ i = b.2)
 
---def PerfectMatching \to Perm α
---	 min \to min
 
 
 variable {α : Type u} [Fintype α] [DecidableEq α] [LinearOrder α]
 --sum_sigma\in PerfectMatching signpm(sigma)\prod_i\in sigma.edges a i.1 i.2
 def set {α} [Fintype α] [DecidableEq α] (b : α × α) : Finset α :=
   {b.1, b.2}
+
+
+-- In a perfect matching, each element of α lies in EXACTLY
+-- one block.
+theorem PerfectMatching.unique_block (M : PerfectMatching α) :
+  ∀ (i : α), ∃! b ∈ M.edges, i ∈ set b := by
+    intro i
+    obtain ⟨b, hbedge, hbi⟩ := M.union i
+    use b
+    constructor
+    constructor
+    · exact hbedge
+    · rw[set]
+      refine mem_insert.mpr ?_
+      by_cases h: i=b.1
+      · exact Or.symm (Or.inr h)
+      have halt : i=b.2 := by exact Or.resolve_left hbi h
+      refine Or.symm (Or.intro_left (i = b.1) ?_)
+      exact mem_singleton.mpr halt
+    intro y ⟨hyedge, hyi⟩
+    have hyinew : i=y.1∨ i=y.2 :=
+      by
+      rw[set] at hyi
+      simp only [mem_insert, mem_singleton] at hyi
+      exact hyi
+    by_contra hneq
+    change (y ≠ b) at hneq
+    symm at hneq
+    have hdj : (b.1 ≠ y.1 ∧ b.2 ≠ y.2 ∧ b.1 ≠ y.2 ∧ b.2 ≠ y.1) := M.disjoint b hbedge y hyedge hneq
+    by_cases hy1: i=y.1
+    · by_cases hb1:i=b.1
+      · rw[← hy1, hb1] at hdj
+        have hcontra := hdj.left
+        contradiction
+      have hb2 : i=b.2 := by exact Or.resolve_left hbi hb1
+      rw[← hy1,hb2] at hdj
+      have hcontra:=hdj.right.right.right
+      contradiction
+    have hy2 : i=y.2 :=by exact Or.resolve_left hyinew hy1
+    by_cases hb1:i=b.1
+    · rw[← hy2,hb1] at hdj
+      have hcontra := hdj.right.right.left
+      contradiction
+    have hb2 : i=b.2 := by exact Or.resolve_left hbi hb1
+    rw[← hy2, hb2] at hdj
+    have hcontra := hdj.right.left
+    contradiction
+
+
+
 lemma block_card_two
-    (M : PerfectMatching α) {b : α ×ₗ α} (hb : b ∈ M.edges) :
+    (M : PerfectMatching α) {b : α × α} (hb : b ∈ M.edges) :
     (set b).card = 2 := by
     have hne : b.1 ≠ b.2 := ne_of_lt (M.ordered b hb)
-    simp [_root_.set, hne]
+    rw[set]
+    simp only [mem_singleton, hne, not_false_eq_true, card_insert_of_notMem, card_singleton,
+      Nat.reduceAdd]
 
 lemma blocks_cover (M : PerfectMatching α) :
     (M.edges.biUnion set : Finset α) = Finset.univ := by
@@ -100,8 +150,35 @@ lemma blocks_cover (M : PerfectMatching α) :
     rcases M.union i with ⟨b, hb, hi⟩
     apply Finset.mem_biUnion.mpr
     refine ⟨b, hb, ?_⟩
-    rcases hi with rfl | rfl <;> simp [_root_.set]
-
+    rw[set]
+    rcases hi with rfl | rfl <;> simp
+lemma disjoint_edges (M : PerfectMatching α) :
+  ∀ a ∈ M.edges, ∀ b ∈ M.edges, a ≠ b → Disjoint ({a.1, a.2} : Finset α) ({b.1, b.2} : Finset α)
+:=by
+intro a ha b hb hab
+have hm:= M.disjoint a ha b hb hab
+have hma1 : (a.1 ≠ b.1) ∧ (a.1≠ b.2) := ⟨hm.left,hm.right.right.left⟩
+refine disjoint_insert_left.mpr ?_
+constructor
+· by_contra hcontra
+  simp only [mem_insert, mem_singleton] at hcontra
+  by_cases ha1 : a.1 = b.1
+  · have hcontra1 := hma1.left
+    contradiction
+  have ha2 : a.1=b.2 := by exact Or.resolve_left hcontra ha1
+  have hcontra2 := hma1.right
+  contradiction
+refine disjoint_singleton_left.mpr ?_
+· have hma2 : a.2 ≠ b.1 ∧ a.2≠ b.2 :=
+    by exact ⟨hm.right.right.right,hm.right.left⟩
+  by_contra hcontra
+  simp only [mem_insert, mem_singleton] at hcontra
+  by_cases ha2 : a.2 = b.1
+  · have hcontra1 := hma2.left
+    contradiction
+  have ha2 : a.2=b.2 := by exact Or.resolve_left hcontra ha2
+  have hcontra2 := hma2.right
+  contradiction
 lemma card_eq_sum_block_card (M : PerfectMatching α) :
     Fintype.card α = ∑ b ∈ M.edges, (set b).card := by
   -- cardinality of the union of blocks as a sum
@@ -110,7 +187,7 @@ lemma card_eq_sum_block_card (M : PerfectMatching α) :
         = (Finset.univ : Finset α).card := (Finset.card_univ (α := α)).symm
     _ = (M.edges.biUnion set : Finset α).card := by
           simp [blocks_cover M]
-    _ = ∑ b ∈ M.edges, (set b).card := Finset.card_biUnion M.disjoint
+    _ = ∑ b ∈ M.edges, (set b).card := Finset.card_biUnion (disjoint_edges M)
 
 theorem PerfectMatching.card_eq_twice_card_edges (M : PerfectMatching α) :
   Fintype.card α = 2 * M.edges.card :=
@@ -135,52 +212,12 @@ theorem even_card_of_exists_PerfectMatching
   obtain ⟨M⟩ := h
   exact PerfectMatching.card_even M
 
-example : Even (Fintype.card (Fin 4)) :=
-  even_card_of_exists_PerfectMatching (.intro pm_ex)
 
-#check PerfectMatching.card_even pm_ex
 
--- In a perfect matching, each element of α lies in EXACTLY
--- one block.
-theorem PerfectMatching.unique_block (M : PerfectMatching α) :
-  ∀ (i : α), ∃! b ∈ M.edges, i ∈ set b := by
-    intro i
-    obtain ⟨b, hbedge, hbi⟩ := M.union i
-    use b
-    simp_rw [_root_.set]
-    constructor
-    · simp
-      exact ⟨hbedge, hbi⟩
-    intro y ⟨hyedge, hyi⟩
-    nth_rw 2 [← mem_singleton] at hbi
-    have hb : i ∈ ({b.1, b.2} : Finset α) := mem_insert.mpr hbi
-    have hne : (({b.1, b.2} : Finset α) ∩ ({y.1, y.2} : Finset α) : Finset α).Nonempty := by
-      use i
-      rw [mem_inter]
-      exact ⟨hb, hyi⟩
-    rw [← not_disjoint_iff_nonempty_inter] at hne
-    by_contra hneq
-    change (y ≠ b) at hneq
-    symm at hneq
-    have hdj : Disjoint {b.1, b.2} {y.1, y.2} := M.disjoint b hbedge y hyedge hneq
-    contradiction
-
--- The edge (block) of M containing a given element
 def PerfectMatching.block (M : PerfectMatching α) : α → α × α :=
   fun i => Finset.choose (fun (b : α × α) => (i ∈ set b))
                          (M.edges : Finset (α × α)) (PerfectMatching.unique_block M i)
 
-#eval PerfectMatching.block pm_ex 0
-
-#eval PerfectMatching.block pm_ex 1
-
-#eval PerfectMatching.block pm_ex 2
-
-#eval PerfectMatching.block pm_ex 3
-
-#eval PerfectMatching.block pm_ex2 1
-
-#eval PerfectMatching.block pm_ex2 3
 
 theorem PerfectMatching.block_spec (M : PerfectMatching α) (i : α) :
   (PerfectMatching.block M i ∈ M.edges) ∧ (i ∈ set (PerfectMatching.block M i)) := by
@@ -196,23 +233,10 @@ theorem PerfectMatching.block_uni (M : PerfectMatching α) (i : α) (b : α × �
 
 def first_or_second_if_not (pair : α × α) (i : α) := if pair.1 = i then pair.2 else pair.1
 
-#eval first_or_second_if_not (0, 2) 3
-
-#eval first_or_second_if_not (0, 2) 2
-
-#eval first_or_second_if_not (0, 2) 0
-
 -- The partner of a given element of α in M:
 def PerfectMatching.partner (M : PerfectMatching α) : α → α :=
   fun i => first_or_second_if_not (M.block i) i
 
-#eval pm_ex2.partner 0
-
-#eval pm_ex2.partner 5
-
-#eval pm_ex2.partner 1
-
-#eval pm_ex2.partner 2
 
 theorem PerfectMatching.partner_block (M : PerfectMatching α) (i : α) :
     set (M.block i) = {i, M.partner i} := by
@@ -229,7 +253,7 @@ theorem PerfectMatching.partner_block (M : PerfectMatching α) (i : α) :
     unfold first_or_second_if_not; aesop;
     exact Finset.pair_comm _ _;
   aesop
-
+-- From here on out my own work.
 def sortedEdges
   (M : PerfectMatching (Fin (2 * n))) :
   List (Fin (2*n)×ₗFin (2*n)) :=
@@ -651,6 +675,7 @@ rw[Pf]
 rw[det_eq_sum_odd_even]
 rw[odd_sum_eq_zero,add_zero]
 sorry
+sorry
 
 
 theorem partner_not_eq
@@ -844,27 +869,34 @@ exact ((perm_of_pair_matching_it M N) ^[m] (1,1)).1
 def perm_of_pair_matching
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) : Perm (Fin (2*n)) := by
 exact perm_of_pair_matching_it_many n M N
+
 theorem even_perm_perm_of_pair_matching_it_of_even {n : ℕ} [NeZero n]
- (M N: (PerfectMatching (Fin (2 * n)))) (fm : Perm (Fin (2 * n))×ℕ) (hfm :even_perm fm.1 ) : even_perm ((perm_of_pair_matching_it M N fm).1) :=
+ (M N : (PerfectMatching (Fin (2 * n)))) (fm : Perm (Fin (2 * n)) × ℕ) (hfm : even_perm fm.1) :
+  even_perm ((perm_of_pair_matching_it M N fm).1) :=
 by
 rw[perm_of_pair_matching_it]
 by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
-· have h2: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)  else (fm.1, n + 1)) = (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1):=
+· have h2: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
+  then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)
+  else (fm.1, n + 1)) = (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1):=
     by exact if_pos h
   rw[h2]
   simp only [Fin.ofNat_eq_cast]
   rw[even_perm]
-  intro σ
-  intro hσ
+  intro σ hσ
   rw[even_perm] at hfm
   have h3 :σ ∈ (fm.1).cycleFactorsFinset ∨ σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=
     by sorry
   by_cases h4: σ ∈ (fm.1).cycleFactorsFinset
-  exact Units.val_inj.mp (congrArg Units.val (hfm σ h4))
+  · exact Units.val_inj.mp (congrArg Units.val (hfm σ h4))
   have h5 :σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=by
-    sorry
+    exact Or.resolve_left h3 h4
   have h6 : σ = (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)) :=by
-    sorry
+    have h6help : (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset
+    = { cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)} := by
+      refine cycleFactorsFinset_eq_singleton_self_iff.mpr ?_
+      exact cycle_of_pair_matching_cycle M N (Fin.ofNat (2 * n) fm.2)
+    exact (eq_singleton_iff_unique_mem.mp (h6help)).right σ h5
   rw[h6]
   exact cycle_of_pair_matching_even M N (Fin.ofNat (2 * n) fm.2)
 · have h7: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)  else (fm.1, n + 1)) = (fm.1, n + 1) :=
