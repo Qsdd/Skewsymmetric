@@ -69,7 +69,8 @@ theorem det_eq_zero_of_IsSkewSymm_odd_dim [CommRing α] [NoZeroDivisors α]
   apply Or.resolve_left at h4
   exact h4 h0
 
----The following are due to LEAN club, modified to my purposes
+---The following are due to LEAN club :
+-- George H. Seelinger, Chenchen Zhao, Darij Grinberg modified to my purposes
 
 structure PerfectMatching (α : Type u) [Fintype α] [DecidableEq α] [LinearOrder α] where
   edges : Finset (α ×ₗ α)
@@ -253,6 +254,7 @@ theorem PerfectMatching.partner_block (M : PerfectMatching α) (i : α) :
     unfold first_or_second_if_not; aesop;
     exact Finset.pair_comm _ _;
   aesop
+
 -- From here on out solely my own work.
 lemma partner_not_eq
   {n : ℕ} (M : (PerfectMatching (Fin (2 * n)))) (x : Fin (2 * n)) :
@@ -296,7 +298,7 @@ theorem sortedEdges_nodup (n : ℕ) (M : PerfectMatching (Fin (2 * n))) : List.N
 by exact sort_nodup M.edges fun a b ↦ a ≤ b
 
 theorem sortedEdges_injone (l m n : ℕ) (M : PerfectMatching (Fin (2 * n)))
-(h1 : l < (sortedEdges M).length) (h2 : m < (sortedEdges M).length)
+(hl : l < (sortedEdges M).length) (hm : m < (sortedEdges M).length)
 (h : (sortedEdges M)[l] = (sortedEdges M)[m]) : l=m:=by
 have h4 := sortedEdges_nodup n M
 exact (List.Nodup.getElem_inj_iff h4).mp h
@@ -603,7 +605,7 @@ push_neg
 by_cases h : ¬even_perm f
 sorry
 sorry
---The determinant maybe split into two sums over the odds and the evens
+--The determinant may be split into two sums over the odds and the evens
 theorem det_eq_sum_odd_even
 {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :
 det A = ∑ σ : Perm (Fin (2 * n)) with even_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i +
@@ -651,7 +653,8 @@ rw[perm_of_odd_perm]
 simp
 sorry
 
-theorem perm_of_odd_perm_odd {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f): odd_perm (perm_of_odd_perm f h) := by
+theorem perm_of_odd_perm_odd {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f):
+odd_perm (perm_of_odd_perm f h) := by
 rw[odd_perm]
 rw[perm_of_odd_perm]
 use f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))
@@ -661,12 +664,14 @@ sorry
 sorry
 
 
-theorem inv_perm_of_odd_perm {n : ℕ}  [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f)  : perm_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h) = f := by
+theorem inv_perm_of_odd_perm {n : ℕ}  [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f)
+: perm_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h) = f := by
 rw[perm_of_odd_perm]
 sorry
 --The preceeding work culminates here in showing that the odd permutations
 --do not contribute to the determinant
-theorem odd_sum_eq_zero {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h:A.IsSkewSymm) :
+theorem odd_sum_eq_zero {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
+ (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h:A.IsSkewSymm) :
 ∑ σ : Perm (Fin (2 * n)) with odd_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i = 0 :=by sorry
 
 
@@ -863,7 +868,8 @@ by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
   rw[even_perm]
   intro σ hσ
   rw[even_perm] at hfm
-  have h3 :σ ∈ (fm.1).cycleFactorsFinset ∨ σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=
+  have h3 :σ ∈ (fm.1).cycleFactorsFinset
+  ∨ σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=
     by sorry
   by_cases h4: σ ∈ (fm.1).cycleFactorsFinset
   · exact Units.val_inj.mp (congrArg Units.val (hfm σ h4))
@@ -877,11 +883,14 @@ by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
     exact (eq_singleton_iff_unique_mem.mp (h6help)).right σ h5
   rw[h6]
   exact cycle_of_pair_matching_even M N (Fin.ofNat (2 * n) fm.2)
-· have h7: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)  else (fm.1, n + 1)) = (fm.1, n + 1) :=
+· have h7: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
+  then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)
+  else (fm.1, n + 1)) = (fm.1, n + 1) :=
     by exact if_neg h
   rw[h7]
   exact hfm
-theorem even_perm_of_pair_matching  {n : ℕ} [NeZero n](M N: (PerfectMatching (Fin (2 * n)))) : even_perm (perm_of_pair_matching M N) :=
+theorem even_perm_of_pair_matching {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
+: even_perm (perm_of_pair_matching M N) :=
 by sorry
 --We now start build a pair of matchings from a given even permutation.
 theorem pair_matching_of_even_perm {n : ℕ} [NeZero n] (σ : Perm (Fin (2 * n))) (hσ : even_perm σ) :
