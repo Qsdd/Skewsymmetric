@@ -43,9 +43,17 @@ lemma transpose_eq_minus_of_Skewsymm [CommRing α] (A : Matrix n n α) (h : A.Is
 apply IsSkewSymm.eq at h
 exact neg_eq_iff_eq_neg.mp h
 
-
-
-
+lemma diag_eq_zero_of_SkewSymm [CommRing α] [NoZeroDivisors α]
+(A : Matrix n n α) (h0 : ¬(1:α) + (1:α) = 0) (h : A.IsSkewSymm) :
+A i i = 0 := by
+apply IsSkewSymm.apply at h
+have hA : A i i = - (A i i) := by exact neg_eq_iff_eq_neg.mp (h i i)
+apply eq_neg_iff_add_eq_zero.mp at hA
+rw[← one_mul (A i i)] at hA
+rw[← RightDistribClass.right_distrib] at hA
+rw[mul_eq_zero] at hA
+apply Or.resolve_left at hA
+exact hA h0
 variable {n : ℕ}
 /-- The determinant of an odd-dimensional skew-symmetric matrix is 0. -/
 theorem det_eq_zero_of_IsSkewSymm_odd_dim [CommRing α] [NoZeroDivisors α]
@@ -69,6 +77,59 @@ theorem det_eq_zero_of_IsSkewSymm_odd_dim [CommRing α] [NoZeroDivisors α]
   apply Or.resolve_left at h4
   exact h4 h0
 
+
+def det_prod {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
+(σ : Perm (Fin (2 * n))) (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :R := ∏ i, A (σ i) i
+
+theorem det_prod_eq_zero_of_not_full_support {R : Type v} (n : ℕ)
+  [NeZero n] [CommRing R] [NoZeroDivisors R] [Nontrivial R] (h0 : ¬(1:R) + (1:R) = 0)
+  (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (hA : IsSkewSymm A)
+  (σ : Perm (Fin (2 * n))) (hσ : ∃ x, x ∉ σ.support) :
+det_prod σ A = 0 := by
+obtain ⟨x,hx⟩ := hσ
+simp only [Perm.mem_support, ne_eq, Decidable.not_not] at hx
+rw[det_prod]
+have hax : A (σ x) x = 0 :=by
+  rw[hx]
+  exact diag_eq_zero_of_SkewSymm A h0 hA
+have hprod: ∃ i∈ univ, A (σ i) i =0 :=by
+  use x
+  constructor
+  · exact mem_univ x
+  exact hax
+exact prod_eq_zero_iff.mpr hprod
+
+def full_support (σ : Perm (Fin (2 * n))) :Prop := ∀x, x∈σ.support
+noncomputable instance (σ : Perm (Fin (2 * n))) : Decidable (full_support σ ) :=
+  by exact Classical.propDecidable (full_support σ)
+
+theorem det_eq_full_support_det {n : ℕ} [NeZero n] [CommRing R] [NoZeroDivisors R] [Nontrivial R]
+ (h0 : ¬(1:R) + (1:R) = 0) (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (hA : IsSkewSymm A)
+  : det A =  ∑ σ : Perm (Fin (2*n)) with full_support σ , Equiv.Perm.sign σ • ∏ i, A (σ i) i:=
+  by
+have h :det A = ∑ σ : Perm (Fin (2 * n)) with full_support σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i
+ + ∑ σ : Perm (Fin (2 * n)) with ¬ full_support σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i :=
+  by
+  rw[det_apply]
+  exact Eq.symm (sum_filter_add_sum_filter_not univ full_support fun x ↦ sign x • ∏ i, A (x i) i)
+rw[h]
+simp only [add_eq_left]
+have hpush_neg : ∑ σ with ¬full_support σ, sign σ • ∏ i, A (σ i) i
+  = ∑ σ with ∃ x, x ∉ σ.support, sign σ • ∏ i, A (σ i) i :=
+by simp only [full_support, Perm.mem_support, ne_eq, not_forall, Decidable.not_not]
+rw[hpush_neg]
+have hdetprod :=det_prod_eq_zero_of_not_full_support n h0 A hA
+have hdetprod2 : ∀ (σ : Perm (Fin (2 * n))), (∃ x, x ∉ σ.support) → ∏ i, A (σ i) i  = 0 :=
+  by
+  intro σ hσ
+  exact hdetprod σ hσ
+refine Finset.sum_eq_zero ?_
+intro σ hσ
+simp only [Perm.mem_support, ne_eq, Decidable.not_not, mem_filter, mem_univ, true_and] at hσ
+rw [hdetprod2]
+· rw[smul_zero]
+simp only [Perm.mem_support, ne_eq, Decidable.not_not]
+exact hσ
 ---The following are due to LEAN club :
 -- George H. Seelinger, Chenchen Zhao, Darij Grinberg modified to my purposes
 
@@ -85,7 +146,8 @@ variable {α : Type u} [Fintype α] [DecidableEq α] [LinearOrder α]
 --sum_sigma\in PerfectMatching signpm(sigma)\prod_i\in sigma.edges a i.1 i.2
 def set {α} [Fintype α] [DecidableEq α] (b : α × α) : Finset α :=
   {b.1, b.2}
-
+def pair {α} [Fintype α] [DecidableEq α] [LinearOrder α] (c d : α) : α × α :=
+  (min c d, max c d)
 
 -- In a perfect matching, each element of α lies in EXACTLY
 -- one block.
@@ -503,7 +565,6 @@ by
   --inverse map
   ------------------------------------------------------------
   · exact Function.invFun (perm_of_matching n M)
-
   · exact leftInverse_invFun (perm_of_matching_injective n M)
   · exact rightInverse_invFun (Bijective.surjective (perm_of_matching_bijective M))
 --we define the sign of our matching to be the sign of the associated permutation
@@ -533,6 +594,11 @@ noncomputable def Pf
 {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R):R := by
 have h := fintypematching n
 exact ∑ M: (PerfectMatching (Fin (2 * n))), signMatching M * ∏ i ∈ M.edges, A (i.1) (i.2)
+
+def Pf_prod {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
+ (M : PerfectMatching (Fin (2 * n))) (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :R:=
+ ∏ i ∈ M.edges, A (i.1) (i.2)
+
 
 --We show a couple of simple properties.
 lemma matching_card (n : ℕ) [NeZero n] (M : PerfectMatching (Fin (2 * n))) :
@@ -583,7 +649,14 @@ def odd_perm {α : Type u_2} [Fintype α] [LinearOrder α] (f : Perm α) : Prop 
 noncomputable instance odd_perm_decidable {α : Type u_2} [Fintype α] [LinearOrder α]
  (f : Perm α) :Decidable (odd_perm f):= by
 exact Classical.propDecidable (odd_perm f)
+abbrev Odd_Perm (α : Type u_2) [Fintype α] [LinearOrder α] := { x : Perm (α) | odd_perm x }
 
+
+
+
+structure Even_Perm {α : Type u_2} [Fintype α] [LinearOrder α] where
+perm : Perm (α)
+odd : odd_perm (perm)
 theorem odd_or_even {α : Type u_2} [Fintype α] [LinearOrder α] (f : Perm α) :
 even_perm f ∨ odd_perm f :=
 by
@@ -597,14 +670,19 @@ have h2 : ∃ σ ∈ f.cycleFactorsFinset, sign σ = 1 := by
   apply sign_two_values x at h5
   exact Filter.frequently_principal.mp fun a ↦ a h4 h5
 exact Or.inr h2
+theorem odd_of_not_even {α : Type u_2} [Fintype α] [LinearOrder α] (f : Perm α) :
+    ¬(even_perm f) ↔ odd_perm f := by
+  constructor
+  · intro h
+    rcases odd_or_even f with h_even | h_odd
+    · exact False.elim (h h_even)
+    · exact h_odd
+  · intro h_odd h_even
+    rcases h_odd with ⟨σ, hσ, hs⟩
+    have hs' : sign σ = -1 := h_even σ hσ
+    have : (1 : ℤˣ) = -1 := hs.symm.trans hs'
+    norm_num at this
 
-theorem odd_of_not_even {α : Type u_2} [Fintype α] [LinearOrder α] (f : Perm α) : ¬(even_perm f) ↔ odd_perm f := by
-rw[even_perm]
-rw[odd_perm]
-push_neg
-by_cases h : ¬even_perm f
-sorry
-sorry
 --The determinant may be split into two sums over the odds and the evens
 theorem det_eq_sum_odd_even
 {R : Type v} {n : ℕ} [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :
@@ -617,11 +695,20 @@ have h :det A = ∑ σ : Perm (Fin (2 * n)) with even_perm σ, Equiv.Perm.sign �
   exact Eq.symm (sum_filter_add_sum_filter_not univ even_perm fun x ↦ sign x • ∏ i, A (x i) i)
 rw[h]
 rw [add_right_inj]
-sorry
+simp only [odd_of_not_even]
+
+theorem odd_sum_eq_Odd_sum {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
+  (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) :
+  ∑ σ : Perm (Fin (2 * n)) with odd_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i
+  =  ∑ τ : (Odd_Perm (Fin (2 * n))), Equiv.Perm.sign τ.val • ∏ i, A (τ.val i) i := by
+  refine sum_subtype {σ | odd_perm σ} ?_ fun a ↦ sign a • ∏ i, A (a i) i
+  intro σ
+  exact mem_filter_univ σ
 --We now aim to show that the odd permutations sum to zero by explicitly showing which terms cancel
 --To any odd permuation we associate another with which it will cancel.
-theorem nat_of_odd_perm {n : ℕ} [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f) :
-∃m : ℕ,  sign (f.cycleOf (Fin.ofNat (2*n) m)) =1 := by
+theorem nat_of_odd_perm {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) :
+∃m : ℕ, (f.cycleOf (Fin.ofNat (2*n) m))∈f.cycleFactorsFinset
+∧ sign (f.cycleOf (Fin.ofNat (2*n) m)) =1 := by
 rw[odd_perm] at h
 obtain ⟨x, (h1)⟩ := h
 obtain ⟨h2, (h3)⟩ := h1
@@ -632,47 +719,344 @@ have ha : ∃a:Fin (2 * n), a∈ x.support := by
   obtain ⟨help1, help2⟩ := help
   exact help1
 obtain ⟨a, (h4)⟩ := ha
-have h4 := cycle_is_cycleOf h4 h2
+have h5 := cycle_is_cycleOf h4 h2
 use a
+constructor
+· refine cycleOf_mem_cycleFactorsFinset_iff.mpr ?_
+  refine mem_support_iff_mem_support_of_mem_cycleFactorsFinset.mpr ?_
+  use x
+  constructor
+  · exact mem_def.mpr h2
+  · simp only [Fin.ofNat_eq_cast, Fin.cast_val_eq_self, h4]
 simp only [Fin.ofNat_eq_cast, Fin.cast_val_eq_self]
-rw[← h4]
+rw[← h5]
 rw[h3]
+
 def small_nat_of_odd_perm {n : ℕ} [NeZero n]
 (f : Perm (Fin (2 * n))) (h : odd_perm f) :ℕ :=by
 have h2:=nat_of_odd_perm f h
 exact Nat.find (h2)
+
 def perm_of_odd_perm {n : ℕ} [NeZero n]
 (f : Perm (Fin (2 * n))) (h : odd_perm f) : Perm (Fin (2 * n)):=
 by
 have m:= small_nat_of_odd_perm f h
-exact (f.cycleOf (Fin.ofNat (2*n) (m)))⁻¹*(f.cycleOf (Fin.ofNat (2*n) (m)))⁻¹*f
-theorem hardtoname {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) :
- (perm_of_odd_perm f h).cycleOf  (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)) =
-  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ :=by
-rw[perm_of_odd_perm]
-simp
-sorry
+exact f*(f.cycleOf (Fin.ofNat (2*n) (m)))⁻¹*(f.cycleOf (Fin.ofNat (2*n) (m)))⁻¹
 
-theorem perm_of_odd_perm_odd {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f):
+theorem perm_of_odd_perm_nonsupport {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f)
+(m : Fin (2 * n)) (hm : m ∉ (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))).support)
+ : f m= (perm_of_odd_perm f h) (m) := by
+rw[perm_of_odd_perm]
+rw[mul_apply,mul_apply]
+have hm2: m∉ (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹.support :=by
+  refine Perm.notMem_support.mpr ?_
+  refine inv_eq_iff_eq.mpr ?_
+  have hm' := notMem_support.mp hm
+  exact hm'.symm
+have hm2' := notMem_support.mp hm2
+rw[hm2']
+rw[hm2']
+
+theorem perm_of_odd_perm_support {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f)
+(m : Fin (2 * n)) (hm: m ∈ (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support) :
+ f⁻¹ m= (perm_of_odd_perm f h) (m) := by
+rw[perm_of_odd_perm]
+have hf : f m = f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)) m := by
+  have hfhelp := (mem_support_cycleOf_iff.mp hm).left
+  exact Eq.symm (SameCycle.cycleOf_apply hfhelp)
+have hm2: m∈  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹.support :=by
+  rw[Perm.support_inv]
+  exact hm
+have hfinv : f⁻¹ m = (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ m :=by
+  rw[cycleOf_inv]
+  rw[cycleOf_inv] at hm2
+  have hfinvhelp := (mem_support_cycleOf_iff.mp hm2)
+  have hetwas:= Eq.symm (SameCycle.cycleOf_apply hfinvhelp)
+  exact hetwas
+rw[hfinv]
+have h1 : (f*(f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹).cycleFactorsFinset
+= f.cycleFactorsFinset\{f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))}:=
+  by exact cycleFactorsFinset_mul_inv_mem_eq_sdiff h2
+have hcommute := Disjoint.commute hdisinv
+rw[commutecycles]
+simp only [Perm.coe_mul, Function.comp_apply,
+  EmbeddingLike.apply_eq_iff_eq]
+rw[← hfinv]
+simp only [Perm.coe_inv, apply_symm_apply]
+
+theorem nonsupport_of_perm_of_odd_perm_nonsupport {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) (m: Fin (2 * n))
+(hm: m∉ (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support) :  m∉ ((perm_of_odd_perm f h).cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support :=
+by
+refine Perm.mem_support.mpr ?_
+have help:= perm_of_odd_perm_support f h m hm
+
+theorem support_perm_of_odd_perm_of_support {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) (m: Fin (2 * n))
+(hm: m∈  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support):
+m∈ ((perm_of_odd_perm f h).cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support :=
+by
+refine Perm.notMem_support.mp ?_
+have help:= perm_of_odd_perm_support f h m hm
+
+theorem cycle_factors_of_perm_of_odd_perm {n : ℕ} [NeZero n]
+(f : Perm (Fin (2 * n))) (h : odd_perm f) :
+(perm_of_odd_perm f h).cycleFactorsFinset =
+f.cycleFactorsFinset\{f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))}
+∪{(f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹}:=by
+have h2 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) ∈ f.cycleFactorsFinset :=
+  by
+  refine cycleOf_mem_cycleFactorsFinset_iff.mpr ?_
+  rw[small_nat_of_odd_perm]
+  have hspec:= (Nat.find_spec (nat_of_odd_perm f h)).left
+  exact cycleOf_mem_cycleFactorsFinset_iff.mp hspec
+have h1 : (f*(f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹).cycleFactorsFinset
+= f.cycleFactorsFinset\{f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))}:=
+  by exact cycleFactorsFinset_mul_inv_mem_eq_sdiff h2
+have hdis :=disjoint_mul_inv_of_mem_cycleFactorsFinset h2
+have hdisinv : Disjoint (f * (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹)
+  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ :=
+  by exact disjoint_inv_right_iff.mpr hdis
+have hetwas:=Disjoint.cycleFactorsFinset_mul_eq_union hdisinv
+rw[perm_of_odd_perm]
+nth_rewrite 3 [IsCycle.cycleFactorsFinset_eq_singleton] at hetwas
+· nth_rewrite 2 [cycleFactorsFinset_mul_inv_mem_eq_sdiff] at hetwas
+  · exact hetwas
+  exact mem_def.mpr h2
+refine isCycle_inv.mpr ?_
+have hetwas2 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) ∈ f.cycleFactorsFinset:=
+  by exact mem_def.mpr h2
+exact (mem_cycleFactorsFinset_iff.mp hetwas2).left
+
+theorem commutecycles {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f)
+: Commute (f * (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))⁻¹)
+  (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))⁻¹ := by
+have h2 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) ∈ f.cycleFactorsFinset :=
+  by
+  refine cycleOf_mem_cycleFactorsFinset_iff.mpr ?_
+  rw[small_nat_of_odd_perm]
+  have hspec:= (Nat.find_spec (nat_of_odd_perm f h)).left
+  exact cycleOf_mem_cycleFactorsFinset_iff.mp hspec
+have h1 : (f*(f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹).cycleFactorsFinset
+= f.cycleFactorsFinset\{f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))}:=
+  by exact cycleFactorsFinset_mul_inv_mem_eq_sdiff h2
+have hdis :=disjoint_mul_inv_of_mem_cycleFactorsFinset h2
+have hdisinv : Disjoint (f * (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹)
+  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ :=
+  by exact disjoint_inv_right_iff.mpr hdis
+exact Disjoint.commute hdisinv
+theorem perm_of_odd_perm_odd {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) :
 odd_perm (perm_of_odd_perm f h) := by
 rw[odd_perm]
-rw[perm_of_odd_perm]
-use f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))
-simp
+use (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹
 constructor
-sorry
-sorry
+· rw[cycle_factors_of_perm_of_odd_perm]
+  refine
+    mem_union_right
+      (f.cycleFactorsFinset \ {f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))}) ?_
+  exact mem_singleton.mpr rfl
+rw[small_nat_of_odd_perm]
+rw[sign_inv]
+exact (Nat.find_spec (nat_of_odd_perm f h)).right
+def Odd_Perm_of_Odd_Perm {n : ℕ} [NeZero n] (f : Odd_Perm (Fin (2 * n))) :
+ Odd_Perm (Fin (2 * n)) :=  by
+use perm_of_odd_perm f.val f.property
+exact perm_of_odd_perm_odd f.val f.property
 
+lemma nat_eq_perm_of_odd_perm {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) :
+small_nat_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h)
+= small_nat_of_odd_perm f h := by
+rw[small_nat_of_odd_perm,small_nat_of_odd_perm]
+refine Nat.find_congr' ?_
+intro m
+constructor
+· intro hcon
+  constructor
+  · refine cycleOf_mem_cycleFactorsFinset_iff.mpr ?_
+    have hcon2 := cycleOf_mem_cycleFactorsFinset_iff.mp hcon.left
+    refine Perm.mem_support.mpr ?_
+    apply Perm.mem_support.mp at hcon2
+    by_cases hm: (Fin.ofNat (2*n) m)∈
+    (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support
+    · rw[← perm_of_odd_perm_support f h (Fin.ofNat (2*n) m) hm] at hcon2
+      by_contra
+      have help:=inv_eq_iff_eq.mpr (this.symm)
+      contradiction
+    rw[← perm_of_odd_perm_nonsupport f h (Fin.ofNat (2*n) m) hm] at hcon2
+    exact hcon2
+  have hconright:= hcon.right
+  have hconleft :=hcon.left
+  by_cases hm: (Fin.ofNat (2*n) m)∈
+    (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support
+  have hetwas : f.cycleOf (Fin.ofNat (2 * n) m) =f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)) := by
+    refine SameCycle.cycleOf_eq ?_
+    apply?
+  rw[hetwas]
+  rw[small_nat_of_odd_perm]
+  have hspec := (Nat.find_spec (nat_of_odd_perm f h)).right
+  exact hspec
+  rw[perm_of_odd_perm] at hconright
+  rw[cycleOf_mul_of_apply_right_eq_self] at hconright
+  rw[cycleOf_mul_of_apply_right_eq_self] at hconright
+  exact hconright
+  refine Commute.inv_right ?_
+  refine Commute.symm ?_
+  refine self_mem_cycle_factors_commute ?_
+  rw[small_nat_of_odd_perm]
+  have hspec := (Nat.find_spec (nat_of_odd_perm f h)).left
+  exact hspec
+  simp only [Perm.mem_support, ne_eq, Decidable.not_not] at hm
+  rw[inv_eq_iff_eq]
+  exact hm.symm
+  exact commutecycles f h
+  simp only [Perm.mem_support, ne_eq, Decidable.not_not] at hm
+  rw[inv_eq_iff_eq]
+  exact hm.symm
 
-theorem inv_perm_of_odd_perm {n : ℕ}  [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f)
+intro hcon
+constructor
+· refine cycleOf_mem_cycleFactorsFinset_iff.mpr ?_
+  have hcon2 := cycleOf_mem_cycleFactorsFinset_iff.mp hcon.left
+  refine Perm.mem_support.mpr ?_
+  apply Perm.mem_support.mp at hcon2
+  by_cases hm: (Fin.ofNat (2*n) m)∈
+    (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support
+  · rw[← perm_of_odd_perm_support f h (Fin.ofNat (2*n) m) hm]
+    by_contra
+    have help:=(inv_eq_iff_eq.mp (this)).symm
+    contradiction
+  rw[← perm_of_odd_perm_nonsupport f h (Fin.ofNat (2*n) m) hm]
+  exact hcon2
+have hconright:= hcon.right
+have hconleft :=hcon.left
+by_cases hm: (Fin.ofNat (2*n) m)∈
+  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support
+have hetwas : (perm_of_odd_perm f h).cycleOf (Fin.ofNat (2 * n) m)  =(f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ := by
+  sorry
+rw[hetwas]
+have hspec := (Nat.find_spec (nat_of_odd_perm f h)).right
+rw[small_nat_of_odd_perm]
+rw[sign_inv]
+rw[hspec]
+rw[perm_of_odd_perm]
+rw[cycleOf_mul_of_apply_right_eq_self]
+rw[cycleOf_mul_of_apply_right_eq_self]
+exact hconright
+refine Commute.inv_right ?_
+refine Commute.symm ?_
+refine self_mem_cycle_factors_commute ?_
+rw[small_nat_of_odd_perm]
+have hspec := (Nat.find_spec (nat_of_odd_perm f h)).left
+exact hspec
+simp only [Perm.mem_support, ne_eq, Decidable.not_not] at hm
+rw[inv_eq_iff_eq]
+exact hm.symm
+exact commutecycles f h
+simp only [Perm.mem_support, ne_eq, Decidable.not_not] at hm
+rw[inv_eq_iff_eq]
+exact hm.symm
+lemma inv_perm_of_odd_perm_aux {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f) :
+ (perm_of_odd_perm f h).cycleOf  (Fin.ofNat (2*n)
+ (small_nat_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h) )) =
+  (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h)))⁻¹ :=by
+  rw[nat_eq_perm_of_odd_perm]
+  refine Eq.symm (cycle_is_cycleOf ?_ ?_)
+  · have hspec := (Nat.find_spec (nat_of_odd_perm f h)).left
+    rw[Perm.support_inv]
+    exact
+      (eq_cycleOf_of_mem_cycleFactorsFinset_iff f
+            (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) hspec
+            (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))).mp
+        rfl
+  rw[cycle_factors_of_perm_of_odd_perm]
+  refine mem_union_right
+      (f.cycleFactorsFinset \ {f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))}) ?_
+  exact mem_singleton.mpr rfl
+
+theorem inv_perm_of_odd_perm {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h : odd_perm f)
 : perm_of_odd_perm (perm_of_odd_perm f h) (perm_of_odd_perm_odd f h) = f := by
 rw[perm_of_odd_perm]
-sorry
+rw[inv_perm_of_odd_perm_aux]
+rw[inv_inv]
+rw[perm_of_odd_perm]
+rw[inv_mul_cancel_right,inv_mul_cancel_right]
+theorem inv_Perm_of_Odd_Perm {n : ℕ} [NeZero n] (f : Odd_Perm (Fin (2 * n))) : Odd_Perm_of_Odd_Perm (Odd_Perm_of_Odd_Perm f) =f :=
+by
+rw[Odd_Perm_of_Odd_Perm]
+rw[Odd_Perm_of_Odd_Perm]
+refine Subtype.ext ?_
+simp only [eq_mpr_eq_cast, cast_eq]
+exact inv_perm_of_odd_perm f.val f.prop
+theorem sign_perm_of_odd_perm_eq_sign_self {n : ℕ}  [NeZero n](f : Perm (Fin (2 * n))) (h : odd_perm f) :
+Equiv.Perm.sign f = Equiv.Perm.sign (perm_of_odd_perm f h) := by
+rw[perm_of_odd_perm]
+rw[small_nat_of_odd_perm]
+rw [Perm.sign_mul,Perm.sign_mul, sign_inv]
+have hspec := (Nat.find_spec (nat_of_odd_perm f h)).right
+rw[hspec]
+rw[mul_one, mul_one]
+theorem shift_sign_perm_of_odd_perm {n : ℕ}  [NeZero n]  [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (f : Perm (Fin (2 * n))) (h : odd_perm f):
+∏ i : (Fin (2 * n)), A (f i) i =  -∏ i: Fin (2 * n), A ((perm_of_odd_perm f h) i) i := by
+rw[← prod_filter_mul_prod_filter_not (i ∈ (f.cycleOf (Fin.ofNat (2*n) (small_nat_of_odd_perm f h))).support)]
+
+
+theorem perm_of_odd_perm_opposite_sign{n : ℕ}  [NeZero n]  [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (f : Perm (Fin (2 * n))) (h : odd_perm f):
+Equiv.Perm.sign f • ∏ i, A (f i) i + Equiv.Perm.sign (perm_of_odd_perm f h) • ∏ i, A ((perm_of_odd_perm f h) i) i = 0 := by
+rw[← sign_perm_of_odd_perm_eq_sign_self]
+rw[← smul_add]
+
+theorem perm_of_odd_perm_no_fixed_points {n : ℕ} [NeZero n] (f : Perm (Fin (2 * n))) (h:odd_perm f ) : perm_of_odd_perm f h ≠ f :=
+by
+by_contra h1
+rw[perm_of_odd_perm] at h1
+have h2 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))⁻¹ *
+    (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))⁻¹ = 1 :=
+    by exact mul_left_cancel h1
+have h3 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))⁻¹ = f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)):=
+by exact?
+have h4 : (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h)))^2 =1 :=
+  by sorry
+have hspec := (Nat.find_spec (nat_of_odd_perm f h))
+have fcyclefinset : f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))∈ f.cycleFactorsFinset := mem_def.mpr (hspec.left)
+have fcycle : IsCycle (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) := (mem_cycleFactorsFinset_iff.mp fcyclefinset).left
+have forder : orderOf (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) =2:= by
+  refine orderOf_eq_prime_iff.mpr ?_
+  constructor
+  · exact h4
+  exact cycleOf_ne_one_iff_mem_cycleFactorsFinset.mpr fcyclefinset
+have support2 : #((f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))).support) =2 :=
+  by
+  rw[← IsCycle.orderOf fcycle]
+  exact forder
+have fsignneg : sign (f.cycleOf (Fin.ofNat (2 * n) (small_nat_of_odd_perm f h))) =-1 := by
+  rw [IsCycle.sign fcycle]
+  rw[support2]
+  simp only [even_two, Even.neg_pow, one_pow]
+have hspecright:=hspec.right
+rw[small_nat_of_odd_perm] at fsignneg
+rw[hspecright] at fsignneg
+contradiction
+
+theorem Odd_Perm_of_Odd_Perm_no_fixed_points {n : ℕ} [NeZero n] (f : Odd_Perm (Fin (2 * n))): Odd_Perm_of_Odd_Perm f  ≠ f :=
+by
+rw[Odd_Perm_of_Odd_Perm]
+refine Subtype.coe_ne_coe.mp ?_
+exact perm_of_odd_perm_no_fixed_points f.val f.property
+theorem Odd_Perm_of_Odd_Perm_opposite_sign {n : ℕ}  [NeZero n] [CommRing R] (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (f : Odd_Perm (Fin (2 * n))) :
+Equiv.Perm.sign f.val • ∏ i, A (f.val i) i + Equiv.Perm.sign ((Odd_Perm_of_Odd_Perm f).val) • ∏ i, A ((Odd_Perm_of_Odd_Perm f).val i) i = 0 :=by sorry
+
+lemma Odd_perm_of_Odd_Perm_in_Odd_Perm  {n : ℕ} [NeZero n] :∀f: Odd_Perm (Fin (2 * n)),  Odd_Perm_of_Odd_Perm f ∈ Odd_Perm (Fin (2 * n)) :=
+by exact?
 --The preceeding work culminates here in showing that the odd permutations
 --do not contribute to the determinant
-theorem odd_sum_eq_zero {R : Type v} {n : ℕ} [NeZero n] [CommRing R]
- (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h:A.IsSkewSymm) :
-∑ σ : Perm (Fin (2 * n)) with odd_perm σ, Equiv.Perm.sign σ • ∏ i, A (σ i) i = 0 :=by sorry
+
+theorem odd_sum_eq_zero {R : Type v} {n : ℕ} [NeZero n] [CommRing R] [AddCommMonoid R]
+ (A : Matrix (Fin (2 * n)) (Fin (2 * n)) R) (h : A.IsSkewSymm) :
+∑ σ ∈ Odd_Perm (Fin (2*n)), Equiv.Perm.sign σ • ∏ i, A (σ i) i = 0 :=by
+have hfixpointshelp : ∀ (f : Odd_Perm (Fin (2 * n))), sign f • ∏ i, A (f i) i ≠ 0 → Odd_Perm_of_Odd_Perm f ≠ f :=
+  by
+  intro f h
+  exact Odd_Perm_of_Odd_Perm_no_fixed_points f
+have h2:= Finset.sum_ninvolution perm_of_odd_perm (perm_of_odd_perm_opposite_sign A) hfixpointshelp perm_of_odd_perm_odd
+
 
 
 
@@ -838,28 +1222,54 @@ theorem cycle_of_pair_matching_even {n : ℕ} [NeZero n] (M N : PerfectMatching 
   (x : Fin (2 * n)) : sign (cycle_of_pair_matching M N x) = -1 := by
 have h := cycle_of_pair_matching_cycle M N x
 have h2 :=even_list_of_pair_matching M N x
-sorry
+have h3 := IsCycle.sign h
+rw[h3]
+simp only [neg_inj]
+have h4 : #(cycle_of_pair_matching M N x).support = (list_of_pair_matching M N x).length :=
+  by
+  rw[cycle_of_pair_matching]
+  rw[List.support_formPerm_of_nodup]
+  · refine List.toFinset_card_of_nodup ?_
+    · exact list_of_pair_matching_nodup M N x
+  · exact list_of_pair_matching_nodup M N x
+  intro i
+  have htwo : 2 ≤ (list_of_pair_matching M N x).length:=
+    by exact two_le_list_of_pair_matching M N x
+  have hneq : (list_of_pair_matching M N x).length > 1 :=
+    by exact Nat.lt_of_succ_le htwo
+  have hneq1 : (list_of_pair_matching M N x).length ≠  1 :=
+    by exact Ne.symm (Nat.ne_of_lt htwo)
+  exact Ne.symm (ne_of_apply_ne List.length fun a ↦ hneq1 (id (Eq.symm a)))
+rw[h4]
+have heven : ∃k, (list_of_pair_matching M N x).length = 2*k:= h2
+obtain ⟨k,hk⟩ :=heven
+rw[hk]
+simp only [even_two, Even.mul_right, Even.neg_pow, one_pow]
 --We now build the full permutation iteratively
-def perm_of_pair_matching_it {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
+--might be better to phrase this in terms of disjointness.
+noncomputable instance {n : ℕ} (f g : Perm (Fin (2 * n))) :
+  Decidable (f.Disjoint g) :=by exact Classical.propDecidable (f.Disjoint g)
+
+noncomputable def perm_of_pair_matching_it {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
  (fm : Perm (Fin (2 * n)) × ℕ) : Perm (Fin (2 * n)) × ℕ :=
-by exact (if Fin.ofNat (2*n) (fm.2)∉fm.1.support
+by exact (if fm.1.Disjoint (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2))
  then (fm.1*(cycle_of_pair_matching M N (Fin.ofNat (2*n) (fm.2))),n+1) else (fm.1,n+1))
 
-def perm_of_pair_matching_it_many {n : ℕ} (m : ℕ) [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
- :  Perm (Fin (2 * n)) := by
+noncomputable def perm_of_pair_matching_it_many {n : ℕ} (m : ℕ) [NeZero n]
+(M N : PerfectMatching (Fin (2 * n))) :  Perm (Fin (2 * n)) := by
 exact ((perm_of_pair_matching_it M N) ^[m] (1,1)).1
 
-def perm_of_pair_matching
+noncomputable def perm_of_pair_matching
   {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n)))) : Perm (Fin (2*n)) := by
-exact perm_of_pair_matching_it_many n M N
+exact perm_of_pair_matching_it_many (2*n) M N
 --We show that this permutation is even iteratively.
 theorem even_perm_perm_of_pair_matching_it_of_even {n : ℕ} [NeZero n]
  (M N : (PerfectMatching (Fin (2 * n)))) (fm : Perm (Fin (2 * n)) × ℕ) (hfm : even_perm fm.1) :
   even_perm ((perm_of_pair_matching_it M N fm).1) :=
 by
 rw[perm_of_pair_matching_it]
-by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
-· have h2: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
+by_cases h: fm.1.Disjoint (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2))
+· have h2: (if fm.1.Disjoint (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2))
   then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)
   else (fm.1, n + 1)) = (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1):=
     by exact if_pos h
@@ -868,9 +1278,18 @@ by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
   rw[even_perm]
   intro σ hσ
   rw[even_perm] at hfm
-  have h3 :σ ∈ (fm.1).cycleFactorsFinset
-  ∨ σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=
-    by sorry
+  have h3 :σ ∈ (fm.1).cycleFactorsFinset ∨
+  σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=
+    by
+    have h3help : (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset
+    = (cycleFactorsFinset fm.1)
+    ∪ (cycleFactorsFinset (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2))):=
+      by
+      refine Disjoint.cycleFactorsFinset_mul_eq_union ?_
+      exact h
+    refine mem_union.mp ?_
+    rw[← h3help]
+    exact hσ
   by_cases h4: σ ∈ (fm.1).cycleFactorsFinset
   · exact Units.val_inj.mp (congrArg Units.val (hfm σ h4))
   have h5 :σ ∈ (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2)).cycleFactorsFinset :=by
@@ -883,16 +1302,41 @@ by_cases h: Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
     exact (eq_singleton_iff_unique_mem.mp (h6help)).right σ h5
   rw[h6]
   exact cycle_of_pair_matching_even M N (Fin.ofNat (2 * n) fm.2)
-· have h7: (if Fin.ofNat (2 * n) fm.2 ∉ fm.1.support
+· have h7: (if fm.1.Disjoint (cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2))
   then (fm.1 * cycle_of_pair_matching M N (Fin.ofNat (2 * n) fm.2), n + 1)
   else (fm.1, n + 1)) = (fm.1, n + 1) :=
     by exact if_neg h
   rw[h7]
   exact hfm
+theorem even_perm_perm_of_pair_matching_it_many {n : ℕ} [NeZero n] (m : ℕ)
+ (M N : (PerfectMatching (Fin (2 * n)))) :  even_perm (perm_of_pair_matching_it_many m M N) := by
+ rw[perm_of_pair_matching_it_many]
+ induction' m with d hd
+ ·simp only [iterate_zero, id_eq]
+  rw[even_perm]
+  intro σ hσ
+  rw[cycleFactorsFinset_one] at hσ
+  contradiction
+
+ rw[add_comm,iterate_add, iterate_one]
+ exact even_perm_perm_of_pair_matching_it_of_even M N
+  (((perm_of_pair_matching_it M N)^[d]) (1, 1)) hd
 theorem even_perm_of_pair_matching {n : ℕ} [NeZero n] (M N : PerfectMatching (Fin (2 * n)))
-: even_perm (perm_of_pair_matching M N) :=
-by sorry
+: even_perm (perm_of_pair_matching M N) := even_perm_perm_of_pair_matching_it_many (2*n) M N
+
+theorem perm_of_pair_matching_full_support {n : ℕ} [NeZero n] (M N : (PerfectMatching (Fin (2 * n))))  : full_support (perm_of_pair_matching M N) := by
+rw[full_support]
+simp
+intro m
+rw[perm_of_pair_matching, perm_of_pair_matching_it_many]
+rw[]
 --We now start build a pair of matchings from a given even permutation.
+def list_partial_matching_of_even_perm_cycle {n : ℕ} [NeZero n]
+(σ : Perm (Fin (2 * n))) (hσ : even_perm σ) (x: σ.support)
+ : List (Fin (2 * n)) := Perm.toList σ x
+def partial_matching_of_even_perm_cycle {n : ℕ} [NeZero n] (σ : Perm (Fin (2 * n))) (hσ : even_perm σ) (x: σ.support) : List (Fin (2 * n)) :=
+
+
 theorem pair_matching_of_even_perm {n : ℕ} [NeZero n] (σ : Perm (Fin (2 * n))) (hσ : even_perm σ) :
 ∃M :PerfectMatching (Fin (2 * n)),∃N :PerfectMatching (Fin (2 * n)), σ = perm_of_pair_matching M N := by sorry
 --After this we show that signs and products are preserved under our bijection.
@@ -903,6 +1347,8 @@ rw[det_eq_sum_odd_even]
 rw[odd_sum_eq_zero,add_zero]
 sorry
 sorry
+
+
 def equivtest {n : ℕ} [NeZero n] :Equiv (Fin (2*n)) (Fin 2 × Fin n) :=
 by
   classical
